@@ -1,0 +1,12 @@
+{
+    "name": "SecureRF",
+    "version": "0.0.1",
+    "keywords": "secure, aead, xoodyak, crypto, rf, radio, nonce",
+    "description": "Secure, Authenticated Encryption with Associated Data library for Arduino",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/Atalonica/SecureRF.git"
+    },
+    "frameworks": "arduino",
+    "platforms": "*"
+} 
