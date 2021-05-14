@@ -1,4 +1,5 @@
-setMasterKey  KEYWORD2
-setSecureMessage  KEYWORD2
-getSecureMessage  KEYWORD2
-setNonce  KEYWORD2
+SecureRF	KEYWORD2
+setMasterKey	KEYWORD2
+setSecureMessage	KEYWORD2
+getSecureMessage	KEYWORD2
+setNonce	KEYWORD2

@@ -8,6 +8,7 @@
  */
 
 /*********** Includes ***********/
+#include <Arduino.h>
 
 /*********** Definitions ***********/
 #define XOODYAK_KEY_SIZE 16       /* Size of the key for Xoodyak                */
@@ -36,30 +37,92 @@
 #define leftRotate11(a) (leftRotate((a), 11))
 #define leftRotate14(a) (leftRotate((a), 14))
 
+/* XOR a source byte buffer against a destination */
+#define lw_xor_block(dest, src, len) \
+    do { \
+        unsigned char *_dest = (dest); \
+        const unsigned char *_src = (src); \
+        unsigned _len = (len); \
+        while (_len > 0) { \
+            *_dest++ ^= *_src++; \
+            --_len; \
+        } \
+    } while (0)
+
+/* XOR a source byte buffer against a destination and write to another
+ * destination at the same time. */
+#define lw_xor_block_swap(dest2, dest, src, len) \
+    do { \
+        unsigned char *_dest2 = (dest2); \
+        unsigned char *_dest = (dest); \
+        const unsigned char *_src = (src); \
+        unsigned _len = (len); \
+        while (_len > 0) { \
+            unsigned char _temp = *_src++; \
+            *_dest2++ = *_dest ^ _temp; \
+            *_dest++ = _temp; \
+            --_len; \
+        } \
+    } while (0)
+
+/* XOR a source byte buffer against a destination and write to another
+ * destination at the same time */
+#define lw_xor_block_2_dest(dest2, dest, src, len) \
+    do { \
+        unsigned char *_dest2 = (dest2); \
+        unsigned char *_dest = (dest); \
+        const unsigned char *_src = (src); \
+        unsigned _len = (len); \
+        while (_len > 0) { \
+            *_dest2++ = (*_dest++ ^= *_src++); \
+            --_len; \
+        } \
+    } while (0)
+
+/*********** Typedef structs ***********/
+
+/* State information for the Xoodoo permutation */
+typedef union
+{
+    /** Words of the state organized into rows and columns */
+    uint32_t S[3][4];
+    /** Words of the state as a single linear array */
+    uint32_t W[12];
+    /** Bytes of the state */
+    uint8_t B[12 * sizeof(uint32_t)];
+
+} xoodoo_state_t;
+
 class SecureRF
 {
 
 public:
-    static void setMasterKey(unsigned char *k);
 
-    static bool setSecureMessage(
+    SecureRF();
+
+    void setMasterKey(unsigned char *k);
+
+    bool setNonce(unsigned char *nonce);
+
+    bool setSecureMessage(
         unsigned char *message, // INPUT: 0-44
-        unsigned char *ad,      // INPUT: 0-3 (+1)
-        unsigned char *out      // OUTPUT: (1-4)+(0-44)+16
+        unsigned char messageLength,
+        unsigned char *ad, // INPUT: 0-3 (+1)
+        unsigned char adLength,
+        unsigned char *out // OUTPUT: (1-4)+(0-44)+16
     );
 
-    static bool getSecureMessage(
+    bool getSecureMessage(
         unsigned char *in,      // INPUT: 17-61
         unsigned char *message, // OUTPUT: 0-44
-        unsigned char *ad       // OUTPUT: 1-4
+        unsigned char *ad       // OUTPUT: 0-3
     );
-
-    static bool setNonce(unsigned char *nonce);
 
 private:
 
     /* Parameters */
     static unsigned char key[XOODYAK_KEY_SIZE];
+    static bool keySet;
     //static unsigned char plaintext[RFM69_MAX_PAYLOAD_SIZE - MAX_AD_SIZE - XOODYAK_TAG_SIZE];
     //static unsigned char ciphertext[RFM69_MAX_PAYLOAD_SIZE];
     //static unsigned char associated[MAX_AD_SIZE];
@@ -68,35 +131,31 @@ private:
     /* Times */
     static uint32_t nonceGenTime;
 
-    /* State information for the Xoodoo permutation */
-    static uint32_t xoodoo_state_S[3][4];                 /* Words of the state organized into rows and columns, r=3, c=4    */
-    static uint32_t xoodoo_state_W[12];                   /* Words of the state as a single linear array, 3*4=12             */
-    static uint8_t xoodoo_state_B[12 * sizeof(uint32_t)]; /* Bytes of the state                              */
-
     /* Encrypts and authenticates a packet with Xoodyak */
-    static int8_t xoodyak_aead_encrypt(
-        unsigned char *c,          /* Buffer to receive the output                                     */
-        size_t *clen,              /* Length of the output which includes Ciphertext + AuthTag (16B)   */
-        const unsigned char *m,    /* Buffer containing the plaintext to encrypt                       */
-        size_t mlen,               /* Length of the plaintext in bytes                                 */
-        const unsigned char *ad,   /* Buffer containing A.Data (gets authenticated but not encrypted)  */
-        size_t adlen,              /* Length of the associated data in bytes                           */
-        const unsigned char *npub, /* Points to the packet nonce which must by 16 bytes in length    */
-        const unsigned char *k     /* Points to the private master key to encrypt the packet (16B)     */
-    );                             /* Returns 0 on success, or a negative value if there was an error in the parameters */
+    // int8_t xoodyak_aead_encrypt(
+    //     unsigned char *c,          /* Buffer to receive the output                                     */
+    //     size_t *clen,              /* Length of the output which includes Ciphertext + AuthTag (16B)   */
+    //     const unsigned char *m,    /* Buffer containing the plaintext to encrypt                       */
+    //     size_t mlen,               /* Length of the plaintext in bytes                                 */
+    //     const unsigned char *ad,   /* Buffer containing A.Data (gets authenticated but not encrypted)  */
+    //     size_t adlen,              /* Length of the associated data in bytes                           */
+    //     const unsigned char *npub, /* Points to the packet nonce which must by 16 bytes in length    */
+    //     const unsigned char *k     /* Points to the private master key to encrypt the packet (16B)     */
+    // );                             /* Returns 0 on success, or a negative value if there was an error in the parameters */
 
-    /* Decrypts and authenticates a packet with Xoodyak */
-    static int8_t xoodyak_aead_decrypt(
-        unsigned char *m,          /* Buffer containing the decrypted plaintext                        */
-        size_t *mlen,              /* Length of the plaintext in bytes                                 */
-        const unsigned char *c,    /* Buffer containing the ciphertext and Auth.Tag to decrypt         */
-        size_t clen,               /* Length of the input which includes Ciphertext + AuthTag (16B)    */
-        const unsigned char *ad,   /* Buffer containing A.Data (gets authenticated)                    */
-        size_t adlen,              /* Length of the associated data in bytes                           */
-        const unsigned char *npub, /* Points to the packet nonce which must by 16 bytes in length    */
-        const unsigned char *k     /* Points to the private master key to decrypt the packet (16B)     */
-    );                             /* Returns 0 on success, -1 if the Auth.Tag is invalid, other negative number if there was an error in the parameters */
-}
+    // /* Decrypts and authenticates a packet with Xoodyak */
+    // int8_t xoodyak_aead_decrypt(
+    //     unsigned char *m,          /* Buffer containing the decrypted plaintext                        */
+    //     size_t *mlen,              /* Length of the plaintext in bytes                                 */
+    //     const unsigned char *c,    /* Buffer containing the ciphertext and Auth.Tag to decrypt         */
+    //     size_t clen,               /* Length of the input which includes Ciphertext + AuthTag (16B)    */
+    //     const unsigned char *ad,   /* Buffer containing A.Data (gets authenticated)                    */
+    //     size_t adlen,              /* Length of the associated data in bytes                           */
+    //     const unsigned char *npub, /* Points to the packet nonce which must by 16 bytes in length    */
+    //     const unsigned char *k     /* Points to the private master key to decrypt the packet (16B)     */
+    // );                             /* Returns 0 on success, -1 if the Auth.Tag is invalid, other negative number if there was an error in the parameters */
+
+};
 
 #endif
 

@@ -1,15 +1,51 @@
 #include "SecureRF.h"
 
+/*********** Includes ***********/
+#include <string.h>
+
 /*********** Variables ***********/
+
+/*********** Private function prototypes ***********/
+static void xoodyak_absorb(
+    xoodoo_state_t *state,     /* Xoodoo permutation state                 */
+    uint8_t *phase,            /* Points to the current phase, up or down  */
+    const unsigned char *data, /* Points to the data to be absorbed        */
+    size_t len                 /* Length of the data to be absorbed        */
+);
+
+void xoodoo_permute(xoodoo_state_t *state);
+
+int8_t xoodyak_aead_encrypt(
+    unsigned char *c, size_t *clen,
+    const unsigned char *m, size_t mlen,
+    const unsigned char *ad, size_t adlen,
+    const unsigned char *npub,
+    const unsigned char *k);
+
+int8_t xoodyak_aead_decrypt(
+    unsigned char *m, size_t *mlen,
+    const unsigned char *c, size_t clen,
+    const unsigned char *ad, size_t adlen,
+    const unsigned char *npub,
+    const unsigned char *k);
 
 /*********** Public functions ***********/
 
-static void SecureRF::setMasterKey(unsigned char *k)
+SecureRF::SecureRF()
 {
-    mempcy(&key, k, XOODYAK_KEY_SIZE);
+    keySet = false;
+
 }
 
-static bool SecureRF::setNonce(unsigned char *n)
+void SecureRF::setMasterKey(unsigned char *k)
+{
+    if(keySet == false){
+        memcpy(&key, k, XOODYAK_KEY_SIZE);
+        keySet = true;
+    }
+}
+
+bool SecureRF::setNonce(unsigned char *n)
 {
     /* Update generation/request time and limit generation frequency */
     if (millis() - nonceGenTime < (uint32_t)1000 * NONCE_MIN_GEN_TIME)
@@ -28,40 +64,42 @@ static bool SecureRF::setNonce(unsigned char *n)
     return true;
 }
 
-static bool SecureRF::setSecureMessage(
+bool SecureRF::setSecureMessage(
     unsigned char *message,
+    unsigned char messageLength,
     unsigned char *ad,
+    unsigned char adLength,
     unsigned char *out)
 {
-    uint8_t msgLen, adLen, outLen;
+    unsigned int outLen;
 
     /* Ensure that nonce has not expired */
     if (millis() - nonceGenTime < NONCE_LIFETIME)
     {
         /* Check & save input data */
-        msgLen = strlen(message);
-        adLen = strlen(ad) + 1;
-        if (adLen > MAX_AD_SIZE)
+        adLength++;
+        if (adLength > MAX_AD_SIZE)
         {
             return false;
         }
-        if (msgLen > RFM69_MAX_PAYLOAD_SIZE - adLen - XOODYAK_TAG_SIZE)
+        if (messageLength > RFM69_MAX_PAYLOAD_SIZE - adLength - XOODYAK_TAG_SIZE)
         {
             return false;
         }
 
-        /* Append protocol-specific AD information byte to ad (first) */
+        /* Append protocol-specific AD information byte to ad */
         memmove(ad + 1, ad, 4);
-        memset(ad, ((adLen - 1) > 1 ? (adLen - 1) << 6 : (adLen - 1) << 7) | (msgLen & 0x3F), 1);
+        memset(ad, ((adLength - 1) > 1 ? (adLength - 1) << 6 : (adLength - 1) << 7) | (messageLength & 0x3F), 1);
 
         /* Xoodyak AEAD Encrypt */
-        if (xoodyak_aead_encrypt(out, &outLen, message, msgLen, ad, adLen, nonce, key) == 0)
+        if (xoodyak_aead_encrypt(out, &outLen, message, messageLength, ad, adLength, nonce, key) == 0)
         {
             /* Check cipher+tag length is OK */
-            if (outLen == msgLen + XOODYAK_TAG_SIZE)
+            if (outLen == messageLength + XOODYAK_TAG_SIZE)
             {
-                /* Append AD */
-                strcat(out, ad);
+                /* Append AD to output so we can send it with RFM69 */
+                memmove(out + 4, out, outLen);
+                memcpy(out, ad, adLength);
                 return true;
             }
         }
@@ -69,28 +107,33 @@ static bool SecureRF::setSecureMessage(
     return false;
 }
 
-static bool SecureRF::getSecureMessage(
+bool SecureRF::getSecureMessage(
     unsigned char *in,
     unsigned char *message,
     unsigned char *ad)
 {
-    uint8_t msgLen, adLen;
+    unsigned int msgLen, adLen;
+    unsigned char *tmp_ciphtag;
 
     /* Ensure that nonce has not expired */
     if (millis() - nonceGenTime < NONCE_LIFETIME)
     {
         /* Extract AD and message lengths */
-        adLen = in[0] >> 6;
+        adLen = (in[0] >> 6) + 1;
         msgLen = in[0] & 0x3F;
 
+        /* Split AD and Ciphertext+Tag: IN -> AD + (CIPH+TAG)*/
+        memcpy(ad, in, 1);
+        memcpy(tmp_ciphtag, in + 1, msgLen + XOODYAK_TAG_SIZE);
+
         /* Xoodyak AEAD Decrypt and validation */
-        if (xoodyak_aead_decrypt(message, &msgLen, in[adLen + 1], msgLen + XOODYAK_TAG_SIZE, ad, adLen + 1, nonce, key) == 0)
+        if (xoodyak_aead_decrypt(message, &msgLen, tmp_ciphtag, msgLen + XOODYAK_TAG_SIZE, ad, adLen, nonce, key) == 0)
         {
             /* Check ad+cipher+tag length is OK */
             if (adLen + msgLen + XOODYAK_TAG_SIZE <= RFM69_MAX_PAYLOAD_SIZE)
             {
                 /* Remove protocol-specific byte of ad buffer */
-                memmove(ad, ad + 1, adLen + 1);
+                memmove(ad, ad + 1, adLen);
                 return true;
             }
         }
@@ -100,7 +143,7 @@ static bool SecureRF::getSecureMessage(
 
 /*********** Private functions **********/
 
-static int8_t SecureRF::xoodyak_aead_encrypt(
+int8_t xoodyak_aead_encrypt(
     unsigned char *c, size_t *clen,
     const unsigned char *m, size_t mlen,
     const unsigned char *ad, size_t adlen,
@@ -159,7 +202,31 @@ static int8_t SecureRF::xoodyak_aead_encrypt(
     return 0;
 }
 
-static int8_t SecureRF::xoodyak_aead_decrypt(
+int8_t aead_check_tag(
+    unsigned char *plaintext, size_t plaintext_len,
+    const unsigned char *tag1, const unsigned char *tag2, size_t size)
+{
+    /* Set "accum" to -1 if the tags match, or 0 if they don't match */
+    int accum = 0;
+    while (size > 0)
+    {
+        accum |= (*tag1++ ^ *tag2++);
+        --size;
+    }
+    accum = (accum - 1) >> 8;
+
+    /* Destroy the plaintext if the tag match failed */
+    while (plaintext_len > 0)
+    {
+        *plaintext++ &= accum;
+        --plaintext_len;
+    }
+
+    /* If "accum" is 0, return -1, otherwise return 0 */
+    return (int8_t)~accum;
+}
+
+int8_t xoodyak_aead_decrypt(
     unsigned char *m, size_t *mlen,
     const unsigned char *c, size_t clen,
     const unsigned char *ad, size_t adlen,
@@ -212,30 +279,6 @@ static int8_t SecureRF::xoodyak_aead_decrypt(
     state.B[sizeof(state.B) - 1] ^= 0x40; /* Domain separation */
     xoodoo_permute(&state);
     return aead_check_tag(mtemp, *mlen, state.B, c, XOODYAK_TAG_SIZE);
-}
-
-static int8_t aead_check_tag(
-    unsigned char *plaintext, size_t plaintext_len,
-    const unsigned char *tag1, const unsigned char *tag2, size_t size)
-{
-    /* Set "accum" to -1 if the tags match, or 0 if they don't match */
-    int accum = 0;
-    while (size > 0)
-    {
-        accum |= (*tag1++ ^ *tag2++);
-        --size;
-    }
-    accum = (accum - 1) >> 8;
-
-    /* Destroy the plaintext if the tag match failed */
-    while (plaintext_len > 0)
-    {
-        *plaintext++ &= accum;
-        --plaintext_len;
-    }
-
-    /* If "accum" is 0, return -1, otherwise return 0 */
-    return (int8_t)~accum;
 }
 
 /* Permutes the Xoodoo state (in little-endian) */
