@@ -1,2 +1,4 @@
-secureSend	KEYWORD2
-secureReceive	KEYWORD2
+setMasterKey  KEYWORD2
+setSecureMessage  KEYWORD2
+getSecureMessage  KEYWORD2
+setNonce  KEYWORD2
