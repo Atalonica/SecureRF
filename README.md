@@ -2,12 +2,12 @@
 
 By Atalonica
 <br/>
-SecureRF library to be used with LowPowerLab's RFM69 Arduino library modules
+SecureRF library to be used with LowPowerLab's RFM69 Arduino library modules-
 <br/>
 The latest examples, new features and bug fixes are found in the [original repository](https://github.com/Atalonica/SecureRF) of this library.
 
 ## License
-GPL 3.0, please see the [License.txt](https://github.com/LowPowerLab/RFM69/blob/master/License.txt) file for details. Be sure to include the same license with any fork or redistribution of this library.
+TODO
 
 ## Features
 - Authentication Encryption with Associated Data lightweight protocol (Xoodyak)
