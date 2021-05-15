@@ -13,7 +13,7 @@ TODO
 - Authentication Encryption with Associated Data lightweight protocol (Xoodyak)
 - Ephemeral nonce exchange for replay prevention
 - 41-44 bytes max message length
-- 4 bytes of associated data (1 reserved for algorithm)
+- 4 bytes of associated data (1 reserved)
 - (All is hardware AES-128 encrypted/decrypted by RFM69)
 
 ### Library Installation (Arduino IDE)
