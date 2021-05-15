@@ -4,6 +4,13 @@
 #include <string.h>
 
 /*********** Variables ***********/
+unsigned char SecureRF::PLAINTEXT[RFM69_MAX_PAYLOAD_SIZE - MAX_AD_SIZE - XOODYAK_TAG_SIZE + 1];
+unsigned char SecureRF::ASSOCIATED[MAX_AD_SIZE + 1];
+unsigned char SecureRF::SECURE_PAYLOAD[RFM69_MAX_PAYLOAD_SIZE + 1];
+uint8_t SecureRF::PLAINTEXT_LEN;
+uint8_t SecureRF::ASSOCIATED_LEN;
+uint8_t SecureRF::SECURE_PAYLOAD_LEN;
+
 
 /*********** Private function prototypes ***********/
 static void xoodyak_absorb(
@@ -34,12 +41,18 @@ int8_t xoodyak_aead_decrypt(
 SecureRF::SecureRF()
 {
     keySet = false;
-
+    PLAINTEXT_LEN = 0;
+    ASSOCIATED_LEN = 0;
+    SECURE_PAYLOAD_LEN = 0;
+    PLAINTEXT[0] = '\0';
+    ASSOCIATED[0] = '\0';
+    SECURE_PAYLOAD[0] = '\0';
 }
 
 void SecureRF::setMasterKey(unsigned char *k)
 {
-    if(keySet == false){
+    if (keySet == false)
+    {
         memcpy(&key, k, XOODYAK_KEY_SIZE);
         keySet = true;
     }
@@ -68,10 +81,10 @@ bool SecureRF::setSecureMessage(
     unsigned char *message,
     unsigned char messageLength,
     unsigned char *ad,
-    unsigned char adLength,
-    unsigned char *out)
+    unsigned char adLength)
 {
     unsigned int outLen;
+    SECURE_PAYLOAD_LEN = 0;
 
     /* Ensure that nonce has not expired */
     if (millis() - nonceGenTime < NONCE_LIFETIME)
@@ -92,14 +105,15 @@ bool SecureRF::setSecureMessage(
         memset(ad, ((adLength - 1) > 1 ? (adLength - 1) << 6 : (adLength - 1) << 7) | (messageLength & 0x3F), 1);
 
         /* Xoodyak AEAD Encrypt */
-        if (xoodyak_aead_encrypt(out, &outLen, message, messageLength, ad, adLength, nonce, key) == 0)
+        if (xoodyak_aead_encrypt((unsigned char*)SECURE_PAYLOAD, &outLen, message, messageLength, ad, adLength, nonce, key) == 0)
         {
             /* Check cipher+tag length is OK */
             if (outLen == messageLength + XOODYAK_TAG_SIZE)
             {
                 /* Append AD to output so we can send it with RFM69 */
-                memmove(out + 4, out, outLen);
-                memcpy(out, ad, adLength);
+                memmove(SECURE_PAYLOAD + 4, SECURE_PAYLOAD, outLen);
+                memcpy(SECURE_PAYLOAD, ad, adLength);
+                SECURE_PAYLOAD_LEN = outLen + adLength;
                 return true;
             }
         }
@@ -108,12 +122,12 @@ bool SecureRF::setSecureMessage(
 }
 
 bool SecureRF::getSecureMessage(
-    unsigned char *in,
-    unsigned char *message,
-    unsigned char *ad)
+    unsigned char *in)
 {
     unsigned int msgLen, adLen;
     unsigned char *tmp_ciphtag;
+    PLAINTEXT_LEN = 0;
+    ASSOCIATED_LEN = 0;
 
     /* Ensure that nonce has not expired */
     if (millis() - nonceGenTime < NONCE_LIFETIME)
@@ -123,17 +137,19 @@ bool SecureRF::getSecureMessage(
         msgLen = in[0] & 0x3F;
 
         /* Split AD and Ciphertext+Tag: IN -> AD + (CIPH+TAG)*/
-        memcpy(ad, in, 1);
+        memcpy(ASSOCIATED, in, 1);
         memcpy(tmp_ciphtag, in + 1, msgLen + XOODYAK_TAG_SIZE);
 
         /* Xoodyak AEAD Decrypt and validation */
-        if (xoodyak_aead_decrypt(message, &msgLen, tmp_ciphtag, msgLen + XOODYAK_TAG_SIZE, ad, adLen, nonce, key) == 0)
+        if (xoodyak_aead_decrypt((unsigned char*)PLAINTEXT, &msgLen, tmp_ciphtag, msgLen + XOODYAK_TAG_SIZE, (unsigned char*)ASSOCIATED, adLen, nonce, key) == 0)
         {
             /* Check ad+cipher+tag length is OK */
             if (adLen + msgLen + XOODYAK_TAG_SIZE <= RFM69_MAX_PAYLOAD_SIZE)
             {
                 /* Remove protocol-specific byte of ad buffer */
-                memmove(ad, ad + 1, adLen);
+                memmove(ASSOCIATED, ASSOCIATED + 1, adLen);
+                PLAINTEXT_LEN = msgLen;
+                ASSOCIATED_LEN = adLen - 1;
                 return true;
             }
         }

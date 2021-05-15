@@ -100,6 +100,12 @@ public:
 
     SecureRF();
 
+    static unsigned char PLAINTEXT[RFM69_MAX_PAYLOAD_SIZE - MAX_AD_SIZE - XOODYAK_TAG_SIZE + 1];
+    static unsigned char ASSOCIATED[MAX_AD_SIZE + 1];
+    static unsigned char SECURE_PAYLOAD[RFM69_MAX_PAYLOAD_SIZE + 1];
+
+    static uint8_t PLAINTEXT_LEN, ASSOCIATED_LEN, SECURE_PAYLOAD_LEN;
+
     void setMasterKey(unsigned char *k);
 
     bool setNonce(unsigned char *nonce);
@@ -108,28 +114,28 @@ public:
         unsigned char *message, // INPUT: 0-44
         unsigned char messageLength,
         unsigned char *ad, // INPUT: 0-3 (+1)
-        unsigned char adLength,
-        unsigned char *out // OUTPUT: (1-4)+(0-44)+16
+        unsigned char adLength
+        //unsigned char *out // OUTPUT: (1-4)+(0-44)+16
     );
 
     bool getSecureMessage(
-        unsigned char *in,      // INPUT: 17-61
-        unsigned char *message, // OUTPUT: 0-44
-        unsigned char *ad       // OUTPUT: 0-3
+        unsigned char *in      // INPUT: 17-61
+        //unsigned char *message, // OUTPUT: 0-44
+        //unsigned char *ad       // OUTPUT: 0-3
     );
 
 private:
 
     /* Parameters */
-    static unsigned char key[XOODYAK_KEY_SIZE];
-    static bool keySet;
+    unsigned char key[XOODYAK_KEY_SIZE];
+    bool keySet;
     //static unsigned char plaintext[RFM69_MAX_PAYLOAD_SIZE - MAX_AD_SIZE - XOODYAK_TAG_SIZE];
     //static unsigned char ciphertext[RFM69_MAX_PAYLOAD_SIZE];
     //static unsigned char associated[MAX_AD_SIZE];
-    static unsigned char nonce[XOODYAK_NONCE_SIZE]; // public nonce
+    unsigned char nonce[XOODYAK_NONCE_SIZE]; // public nonce
 
     /* Times */
-    static uint32_t nonceGenTime;
+    uint32_t nonceGenTime;
 
     /* Encrypts and authenticates a packet with Xoodyak */
     // int8_t xoodyak_aead_encrypt(
