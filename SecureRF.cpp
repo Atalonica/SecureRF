@@ -49,7 +49,7 @@ SecureRF::SecureRF()
     SECURE_PAYLOAD[0] = '\0';
 }
 
-void SecureRF::setMasterKey(unsigned char *k)
+void SecureRF::setMasterKey(const unsigned char *k)
 {
     if (keySet == false)
     {
@@ -443,7 +443,6 @@ static void xoodyak_absorb(
 
 /*
  * Copyright (C) 2021 Southern Storm Software, Pty Ltd.
- * Copyright (C) 2021 Atalonica.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
