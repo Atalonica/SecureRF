@@ -7,13 +7,13 @@ SecureRF library to be used with LowPowerLab's RFM69 Arduino library modules.
 The latest examples, new features and bug fixes are found in the [original repository](https://github.com/Atalonica/SecureRF) of this library.
 
 ## License
-TODO
+MIT. See LICENCE file (copyright and permission notice shall be included in copies or portions of code).
 
 ## Features
 - Authentication Encryption with Associated Data lightweight protocol (Xoodyak)
 - Ephemeral nonce exchange for replay prevention
 - 41-44 bytes max message length
-- 4 bytes of associated data (1 reserved)
+- 3-1 bytes of associated data
 - (All is hardware AES-128 encrypted/decrypted by RFM69)
 
 ### Library Installation (Arduino IDE)
@@ -28,3 +28,4 @@ This library should work with most RFM69 based boards, however not all of them h
 
 ### Warnings
 - Providing weak or not true random nonces can strongly reduce or break the AEAD scheme, thus it is encouraged to use a compliant hardware-based TRNG.
+- Nonce misuse is part of user's implementation
