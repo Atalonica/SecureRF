@@ -2,9 +2,8 @@
 #define SECURERF_H
 
 /* Xoodyak authenticated encryption algorithm intended to be used with RFM69
- * Adds time-based nonce expiration
- * References:  https://keccak.team/xoodyak.html
- *              https://github.com/LowPowerLab/RFM69
+ * Adds time-based nonce exchange and expiration
+ * References: https://keccak.team/xoodyak.html
  */
 
 /*********** Includes ***********/
@@ -136,6 +135,7 @@ private:
 
 /*
  * Copyright (C) 2021 Southern Storm Software, Pty Ltd.
+ * Copyright (C) 2021 Atalonica.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
