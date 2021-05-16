@@ -23,16 +23,16 @@ static void xoodyak_absorb(
 void xoodoo_permute(xoodoo_state_t *state);
 
 int8_t xoodyak_aead_encrypt(
-    unsigned char *c, size_t *clen,
-    const unsigned char *m, size_t mlen,
-    const unsigned char *ad, size_t adlen,
+    unsigned char *c, uint8_t *clen,
+    const unsigned char *m, uint8_t mlen,
+    const unsigned char *ad, uint8_t adlen,
     const unsigned char *npub,
     const unsigned char *k);
 
 int8_t xoodyak_aead_decrypt(
-    unsigned char *m, size_t *mlen,
-    const unsigned char *c, size_t clen,
-    const unsigned char *ad, size_t adlen,
+    unsigned char *m, uint8_t *mlen,
+    const unsigned char *c, uint8_t clen,
+    const unsigned char *ad, uint8_t adlen,
     const unsigned char *npub,
     const unsigned char *k);
 
@@ -83,7 +83,7 @@ bool SecureRF::setSecureMessage(
     unsigned char *ad,
     unsigned char adLength)
 {
-    unsigned int outLen;
+    uint8_t outLen;
     SECURE_PAYLOAD_LEN = 0;
 
     /* Ensure that nonce has not expired */
@@ -110,10 +110,11 @@ bool SecureRF::setSecureMessage(
             /* Check cipher+tag length is OK */
             if (outLen == messageLength + XOODYAK_TAG_SIZE)
             {
-                /* Append AD to output so we can send it with RFM69 */
-                memmove(SECURE_PAYLOAD + 4, SECURE_PAYLOAD, outLen);
+                /* Append AD and add NULL at end of output so we can send it with RFM69 */
+                memmove(SECURE_PAYLOAD + adLength, SECURE_PAYLOAD, outLen);
                 memcpy(SECURE_PAYLOAD, ad, adLength);
                 SECURE_PAYLOAD_LEN = outLen + adLength;
+                SECURE_PAYLOAD[SECURE_PAYLOAD_LEN] = 0;
                 return true;
             }
         }
@@ -124,8 +125,9 @@ bool SecureRF::setSecureMessage(
 bool SecureRF::getSecureMessage(
     unsigned char *in)
 {
-    unsigned int msgLen, adLen;
-    unsigned char *tmp_ciphtag;
+    uint8_t msgLen, adLen;
+    unsigned char tmp_ciphtag[64];
+    unsigned char tmp_ad[5];
     PLAINTEXT_LEN = 0;
     ASSOCIATED_LEN = 0;
 
@@ -137,19 +139,20 @@ bool SecureRF::getSecureMessage(
         msgLen = in[0] & 0x3F;
 
         /* Split AD and Ciphertext+Tag: IN -> AD + (CIPH+TAG)*/
-        memcpy(ASSOCIATED, in, 1);
-        memcpy(tmp_ciphtag, in + 1, msgLen + XOODYAK_TAG_SIZE);
+        memcpy(tmp_ad, in, adLen);
+        memcpy(tmp_ciphtag, in + adLen, msgLen + XOODYAK_TAG_SIZE);
 
         /* Xoodyak AEAD Decrypt and validation */
-        if (xoodyak_aead_decrypt((unsigned char*)PLAINTEXT, &msgLen, tmp_ciphtag, msgLen + XOODYAK_TAG_SIZE, (unsigned char*)ASSOCIATED, adLen, nonce, key) == 0)
+        if (xoodyak_aead_decrypt((unsigned char*)PLAINTEXT, &msgLen, tmp_ciphtag, msgLen + XOODYAK_TAG_SIZE, tmp_ad, adLen, nonce, key) == 0)
         {
             /* Check ad+cipher+tag length is OK */
             if (adLen + msgLen + XOODYAK_TAG_SIZE <= RFM69_MAX_PAYLOAD_SIZE)
             {
-                /* Remove protocol-specific byte of ad buffer */
-                memmove(ASSOCIATED, ASSOCIATED + 1, adLen);
+                /* Update output buffers lengths and 
+                 * update ad buffer (and remove protocol-specific byte) */
+                ASSOCIATED_LEN = adLen - 1;   
+                memcpy(ASSOCIATED, tmp_ad + 1, ASSOCIATED_LEN);
                 PLAINTEXT_LEN = msgLen;
-                ASSOCIATED_LEN = adLen - 1;
                 return true;
             }
         }
@@ -160,9 +163,9 @@ bool SecureRF::getSecureMessage(
 /*********** Private functions **********/
 
 int8_t xoodyak_aead_encrypt(
-    unsigned char *c, size_t *clen,
-    const unsigned char *m, size_t mlen,
-    const unsigned char *ad, size_t adlen,
+    unsigned char *c, uint8_t *clen,
+    const unsigned char *m, uint8_t mlen,
+    const unsigned char *ad, uint8_t adlen,
     const unsigned char *npub,
     const unsigned char *k)
 {
@@ -243,9 +246,9 @@ int8_t aead_check_tag(
 }
 
 int8_t xoodyak_aead_decrypt(
-    unsigned char *m, size_t *mlen,
-    const unsigned char *c, size_t clen,
-    const unsigned char *ad, size_t adlen,
+    unsigned char *m, uint8_t *mlen,
+    const unsigned char *c, uint8_t clen,
+    const unsigned char *ad, uint8_t adlen,
     const unsigned char *npub,
     const unsigned char *k)
 {

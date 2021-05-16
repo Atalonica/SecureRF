@@ -115,13 +115,10 @@ public:
         unsigned char messageLength,
         unsigned char *ad, // INPUT: 0-3 (+1)
         unsigned char adLength
-        //unsigned char *out // OUTPUT: (1-4)+(0-44)+16
     );
 
     bool getSecureMessage(
         unsigned char *in      // INPUT: 17-61
-        //unsigned char *message, // OUTPUT: 0-44
-        //unsigned char *ad       // OUTPUT: 0-3
     );
 
 private:
@@ -129,38 +126,10 @@ private:
     /* Parameters */
     unsigned char key[XOODYAK_KEY_SIZE];
     bool keySet;
-    //static unsigned char plaintext[RFM69_MAX_PAYLOAD_SIZE - MAX_AD_SIZE - XOODYAK_TAG_SIZE];
-    //static unsigned char ciphertext[RFM69_MAX_PAYLOAD_SIZE];
-    //static unsigned char associated[MAX_AD_SIZE];
     unsigned char nonce[XOODYAK_NONCE_SIZE]; // public nonce
 
     /* Times */
     uint32_t nonceGenTime;
-
-    /* Encrypts and authenticates a packet with Xoodyak */
-    // int8_t xoodyak_aead_encrypt(
-    //     unsigned char *c,          /* Buffer to receive the output                                     */
-    //     size_t *clen,              /* Length of the output which includes Ciphertext + AuthTag (16B)   */
-    //     const unsigned char *m,    /* Buffer containing the plaintext to encrypt                       */
-    //     size_t mlen,               /* Length of the plaintext in bytes                                 */
-    //     const unsigned char *ad,   /* Buffer containing A.Data (gets authenticated but not encrypted)  */
-    //     size_t adlen,              /* Length of the associated data in bytes                           */
-    //     const unsigned char *npub, /* Points to the packet nonce which must by 16 bytes in length    */
-    //     const unsigned char *k     /* Points to the private master key to encrypt the packet (16B)     */
-    // );                             /* Returns 0 on success, or a negative value if there was an error in the parameters */
-
-    // /* Decrypts and authenticates a packet with Xoodyak */
-    // int8_t xoodyak_aead_decrypt(
-    //     unsigned char *m,          /* Buffer containing the decrypted plaintext                        */
-    //     size_t *mlen,              /* Length of the plaintext in bytes                                 */
-    //     const unsigned char *c,    /* Buffer containing the ciphertext and Auth.Tag to decrypt         */
-    //     size_t clen,               /* Length of the input which includes Ciphertext + AuthTag (16B)    */
-    //     const unsigned char *ad,   /* Buffer containing A.Data (gets authenticated)                    */
-    //     size_t adlen,              /* Length of the associated data in bytes                           */
-    //     const unsigned char *npub, /* Points to the packet nonce which must by 16 bytes in length    */
-    //     const unsigned char *k     /* Points to the private master key to decrypt the packet (16B)     */
-    // );                             /* Returns 0 on success, -1 if the Auth.Tag is invalid, other negative number if there was an error in the parameters */
-
 };
 
 #endif
