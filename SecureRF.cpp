@@ -11,7 +11,6 @@ uint8_t SecureRF::PLAINTEXT_LEN;
 uint8_t SecureRF::ASSOCIATED_LEN;
 uint8_t SecureRF::SECURE_PAYLOAD_LEN;
 
-
 /*********** Private function prototypes ***********/
 static void xoodyak_absorb(
     xoodoo_state_t *state,     /* Xoodoo permutation state                 */
@@ -36,6 +35,8 @@ int8_t xoodyak_aead_decrypt(
     const unsigned char *npub,
     const unsigned char *k);
 
+void emptyMem(unsigned char *ptr, uint8_t bytes);
+
 /*********** Public functions ***********/
 
 SecureRF::SecureRF()
@@ -44,9 +45,9 @@ SecureRF::SecureRF()
     PLAINTEXT_LEN = 0;
     ASSOCIATED_LEN = 0;
     SECURE_PAYLOAD_LEN = 0;
-    PLAINTEXT[0] = '\0';
-    ASSOCIATED[0] = '\0';
-    SECURE_PAYLOAD[0] = '\0';
+    emptyMem(PLAINTEXT, RFM69_MAX_PAYLOAD_SIZE - MAX_AD_SIZE - XOODYAK_TAG_SIZE + 1);
+    emptyMem(ASSOCIATED, MAX_AD_SIZE + 1);
+    emptyMem(SECURE_PAYLOAD, RFM69_MAX_PAYLOAD_SIZE + 1);
 }
 
 void SecureRF::setMasterKey(const unsigned char *k)
@@ -91,34 +92,34 @@ bool SecureRF::setSecureMessage(
     {
         /* Check & save input data */
         adLength++;
-        if (adLength > MAX_AD_SIZE)
+        if (adLength <= MAX_AD_SIZE && messageLength <= RFM69_MAX_PAYLOAD_SIZE - adLength - XOODYAK_TAG_SIZE)
         {
-            return false;
-        }
-        if (messageLength > RFM69_MAX_PAYLOAD_SIZE - adLength - XOODYAK_TAG_SIZE)
-        {
-            return false;
-        }
+            /* Append protocol-specific AD information byte to ad */
+            memmove(ad + 1, ad, 4);
+            memset(ad, ((adLength - 1) > 1 ? (adLength - 1) << 6 : (adLength - 1) << 7) | (messageLength & 0x3F), 1);
 
-        /* Append protocol-specific AD information byte to ad */
-        memmove(ad + 1, ad, 4);
-        memset(ad, ((adLength - 1) > 1 ? (adLength - 1) << 6 : (adLength - 1) << 7) | (messageLength & 0x3F), 1);
-
-        /* Xoodyak AEAD Encrypt */
-        if (xoodyak_aead_encrypt((unsigned char*)SECURE_PAYLOAD, &outLen, message, messageLength, ad, adLength, nonce, key) == 0)
-        {
-            /* Check cipher+tag length is OK */
-            if (outLen == messageLength + XOODYAK_TAG_SIZE)
+            /* Xoodyak AEAD Encrypt */
+            if (xoodyak_aead_encrypt((unsigned char *)SECURE_PAYLOAD, &outLen, message, messageLength, ad, adLength, nonce, key) == 0)
             {
-                /* Append AD and add NULL at end of output so we can send it with RFM69 */
-                memmove(SECURE_PAYLOAD + adLength, SECURE_PAYLOAD, outLen);
-                memcpy(SECURE_PAYLOAD, ad, adLength);
-                SECURE_PAYLOAD_LEN = outLen + adLength;
-                SECURE_PAYLOAD[SECURE_PAYLOAD_LEN] = 0;
-                return true;
+                /* Check cipher+tag length is OK */
+                if (outLen == messageLength + XOODYAK_TAG_SIZE)
+                {
+                    /* Append AD and add NULL at end of output so we can send it with RFM69 */
+                    memmove(SECURE_PAYLOAD + adLength, SECURE_PAYLOAD, outLen);
+                    memcpy(SECURE_PAYLOAD, ad, adLength);
+                    SECURE_PAYLOAD_LEN = outLen + adLength;
+                    SECURE_PAYLOAD[SECURE_PAYLOAD_LEN] = 0;
+                    return true;
+                }
             }
         }
     }
+    PLAINTEXT_LEN = 0;
+    ASSOCIATED_LEN = 0;
+    SECURE_PAYLOAD_LEN = 0;
+    emptyMem(PLAINTEXT, RFM69_MAX_PAYLOAD_SIZE - MAX_AD_SIZE - XOODYAK_TAG_SIZE + 1);
+    emptyMem(ASSOCIATED, MAX_AD_SIZE + 1);
+    emptyMem(SECURE_PAYLOAD, RFM69_MAX_PAYLOAD_SIZE + 1);
     return false;
 }
 
@@ -143,24 +144,36 @@ bool SecureRF::getSecureMessage(
         memcpy(tmp_ciphtag, in + adLen, msgLen + XOODYAK_TAG_SIZE);
 
         /* Xoodyak AEAD Decrypt and validation */
-        if (xoodyak_aead_decrypt((unsigned char*)PLAINTEXT, &msgLen, tmp_ciphtag, msgLen + XOODYAK_TAG_SIZE, tmp_ad, adLen, nonce, key) == 0)
+        if (xoodyak_aead_decrypt((unsigned char *)PLAINTEXT, &msgLen, tmp_ciphtag, msgLen + XOODYAK_TAG_SIZE, tmp_ad, adLen, nonce, key) == 0)
         {
             /* Check ad+cipher+tag length is OK */
             if (adLen + msgLen + XOODYAK_TAG_SIZE <= RFM69_MAX_PAYLOAD_SIZE)
             {
                 /* Update output buffers lengths and 
                  * update ad buffer (and remove protocol-specific byte) */
-                ASSOCIATED_LEN = adLen - 1;   
+                ASSOCIATED_LEN = adLen - 1;
                 memcpy(ASSOCIATED, tmp_ad + 1, ASSOCIATED_LEN);
                 PLAINTEXT_LEN = msgLen;
+                PLAINTEXT[msgLen] = 0;
                 return true;
             }
         }
     }
+    PLAINTEXT_LEN = 0;
+    ASSOCIATED_LEN = 0;
+    SECURE_PAYLOAD_LEN = 0;
+    emptyMem(PLAINTEXT, RFM69_MAX_PAYLOAD_SIZE - MAX_AD_SIZE - XOODYAK_TAG_SIZE + 1);
+    emptyMem(ASSOCIATED, MAX_AD_SIZE + 1);
+    emptyMem(SECURE_PAYLOAD, RFM69_MAX_PAYLOAD_SIZE + 1);
     return false;
 }
 
 /*********** Private functions **********/
+
+void emptyMem(unsigned char *ptr, uint8_t bytes)
+{
+    memset(ptr, 0, bytes);
+}
 
 int8_t xoodyak_aead_encrypt(
     unsigned char *c, uint8_t *clen,

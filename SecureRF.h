@@ -16,7 +16,7 @@
 #define XOODYAK_NONCE_SIZE 16     /* Size of the nonce for Xoodyak              */
 #define RFM69_MAX_PAYLOAD_SIZE 61 /* Max size for RFM69 payload in bytes        */
 #define MAX_AD_SIZE 4             /* Max associated data size in bytes          */
-#define NONCE_LIFETIME 500        /* Max nonce life time (in ms)                */
+#define NONCE_LIFETIME 400        /* Max nonce life time (in ms) (keep as low)  */
 #define NONCE_MIN_GEN_TIME 1      /* Min nonce generation time (in seconds)     */
 
 #define XOODYAK_ABSORB_RATE 44  /* Absorbing data rate into the sponge state                            */
