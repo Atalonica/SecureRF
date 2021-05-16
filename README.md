@@ -2,7 +2,7 @@
 
 By Atalonica
 <br/>
-SecureRF library to be used with LowPowerLab's RFM69 Arduino library modules.
+SecureRF library intended to be used together with LowPowerLab's RFM69 Arduino library.
 <br/>
 The latest examples, new features and bug fixes are found in the [original repository](https://github.com/Atalonica/SecureRF) of this library.
 
