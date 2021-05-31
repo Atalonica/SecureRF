@@ -27,5 +27,5 @@ See [this tutorial](https://www.arduino.cc/en/Guide/Libraries) on Arduino librar
 This library should work with most RFM69 based boards, however not all of them have good enough random generation sources (see Warnings below).
 
 ### Warnings
-- Providing weak or not true random nonces can strongly reduce or break the AEAD scheme, thus it is encouraged to use a compliant hardware-based TRNG (or a decrement/increment-only hardware counter).
+- Providing weak or not true random nonces can strongly reduce or break the AEAD scheme, thus it is encouraged to use a compliant hardware-based TRNG (or a decrement/increment-only hardware counter). Nonce misuse (not fulfilling those requirements) is part of the user.
 - All PSK keys saved in flash can be obtained easily. If unallowed tampering is a risk, don't use this library (use a pre-programmed crypto IC).
