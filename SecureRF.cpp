@@ -61,11 +61,18 @@ int8_t xoodyak_aead_decrypt(
 
 void emptyMem(unsigned char *ptr, uint8_t bytes);
 
+int xoodyak_hash(unsigned char *out, const unsigned char *in, uint8_t inlen);
+void xoodyak_hash_init(xoodyak_hash_state_t *state);
+void xoodyak_hash_absorb(xoodyak_hash_state_t *state, const unsigned char *in, size_t inlen);
+void xoodyak_hash_squeeze(xoodyak_hash_state_t *state, unsigned char *out, size_t outlen);
+void xoodyak_hash_finalize(xoodyak_hash_state_t *state, unsigned char *out);
+void xoodyak_hash_pad(xoodyak_hash_state_t *state);
+
 /*********** Public functions ***********/
 
 SecureRF::SecureRF()
 {
-    keySet = false;
+    keysSet = false;
     PLAINTEXT_LEN = 0;
     ASSOCIATED_LEN = 0;
     SECURE_PAYLOAD_LEN = 0;
@@ -74,35 +81,103 @@ SecureRF::SecureRF()
     emptyMem(SECURE_PAYLOAD, RFM69_MAX_PAYLOAD_SIZE + 1);
 }
 
-void SecureRF::setMasterKey(const unsigned char *k)
+void SecureRF::setKeys(const unsigned char *kx, const unsigned char *kh)
 {
-    if (keySet == false)
+    if (keysSet == false)
     {
-        memcpy(&key, k, XOODYAK_KEY_SIZE);
-        keySet = true;
+        memcpy(keyX, kx, XOODYAK_KEY_SIZE);
+        memcpy(keyH, kh, XOODYAK_KEY_SIZE);
+        keysSet = true;
     }
 }
 
-bool SecureRF::setNonce(unsigned char *n)
+bool SecureRF::createNonceRequest(const unsigned char *nReqNameId, const unsigned char *nReqRandId, unsigned char *nReq)
 {
-    /* Update generation/request time and limit generation frequency */
-    if (millis() - nonceGenTime < (uint32_t)1000 * NONCE_MIN_GEN_TIME)
-    {
-        nonceGenTime = millis();
-        return false;
-    }
-    nonceGenTime = millis();
+    /* Buffer to be hashed */
+    unsigned char in[24];
+    memcpy(in, nReqNameId, 4);
+    memcpy(in + 4, nReqRandId, 4);
+    memcpy(in + 8, keyH, 16);
 
-    /* If nonce is same as previous -> error */
-    if (memcmp(n, &nonce, XOODYAK_NONCE_SIZE) == 0)
+    /* Buffer to store hash */
+    unsigned char nReqHash[4];
+
+    if (keysSet && xoodyak_hash(nReqHash, in, 24) == 0)
     {
-        return false;
+        /* Save input data for later */
+        memcpy(_nReqNameId, nReqNameId, 4);
+        memcpy(_nReqRandId, nReqRandId, 4);
+
+        /* Generate nonce request payload */
+        memcpy(nReq, in, 8);
+        memcpy(nReq + 8, nReqHash, 4);
+        nReq[12] = 0;
+        return true;
     }
-    memcpy(&nonce, n, XOODYAK_NONCE_SIZE);
-    return true;
+    return false;
 }
 
-bool SecureRF::setSecureMessage(
+bool SecureRF::onNonceRequest(unsigned char *nReq, const unsigned char *n, unsigned char *nRes)
+{
+    /* Buffer to be hashed */
+    unsigned char in[36];
+    memcpy(in, nReq, 8);
+    memcpy(in + 8, keyH, 16);
+
+    /* Check integrity of nonce request */
+    unsigned char nReqHash[4];
+    if (xoodyak_hash(nReqHash, (const unsigned char*)in, 24) == 0)
+    {
+        if (memcmp(nReq + 8, nReqHash, 4) == 0)
+        {
+            /* Generate nonce response payload (and save nonce) */
+            nReqHash[0] = nReq[4] ^= nReq[2];
+            nReqHash[1] = nReq[5] ^= nReq[3];
+            nReqHash[2] = nReq[6] ^= 0x58;
+            nReqHash[3] = nReq[7] ^= nReq[0];
+            memcpy(in, nReqHash, 4);
+            memcpy(in + 4, keyH, 16);
+            memcpy(in + 20, n, 16);
+            if (xoodyak_hash(nRes, in, 36) == 0)
+            {
+                memcpy(nRes + 4, n, 16);
+                nRes[20] = 0;
+                incomingAEAD = true;
+                return setNonce(n);
+            }
+        }
+    }
+    return false;
+}
+
+bool SecureRF::onNonceResponse(unsigned char *nRes)
+{
+    unsigned char nResTag[4];
+
+    /* Buffer to be hashed */
+    unsigned char in[36];
+    in[0] = _nReqRandId[0] ^ _nReqNameId[2];
+    in[1] = _nReqRandId[1] ^ _nReqNameId[3];
+    in[2] = _nReqRandId[2] ^ 0x58;
+    in[3] = _nReqRandId[3] ^ _nReqNameId[0];
+    memcpy(in + 4, keyH, 16);
+    memcpy(in + 20, nRes + 4, 16);
+
+    /* Generate and save expected return tag */
+    if (xoodyak_hash(nResTag, (const unsigned char*)in, 36) == 0)
+    {
+        /* Check nonce response tag is valid */
+        if (memcmp(nRes, nResTag, 4) == 0)
+        {
+            /* Save received nonce value */
+            return setNonce(nRes, 4);
+        }
+    }
+
+    return false;
+}
+
+bool SecureRF::createSecureMessage(
     unsigned char *message,
     unsigned char messageLength,
     unsigned char *ad,
@@ -112,7 +187,7 @@ bool SecureRF::setSecureMessage(
     SECURE_PAYLOAD_LEN = 0;
 
     /* Ensure that nonce has not expired */
-    if (millis() - nonceGenTime < NONCE_LIFETIME)
+    if (keysSet && millis() - nonceGenTime < NONCE_LIFETIME)
     {
         /* Check & save input data */
         adLength++;
@@ -123,7 +198,7 @@ bool SecureRF::setSecureMessage(
             memset(ad, ((adLength - 1) > 1 ? (adLength - 1) << 6 : (adLength - 1) << 7) | (messageLength & 0x3F), 1);
 
             /* Xoodyak AEAD Encrypt */
-            if (xoodyak_aead_encrypt((unsigned char *)SECURE_PAYLOAD, &outLen, message, messageLength, ad, adLength, nonce, key) == 0)
+            if (xoodyak_aead_encrypt((unsigned char *)SECURE_PAYLOAD, &outLen, message, messageLength, ad, adLength, nonce, keyX) == 0)
             {
                 /* Check cipher+tag length is OK */
                 if (outLen == messageLength + XOODYAK_TAG_SIZE)
@@ -147,7 +222,17 @@ bool SecureRF::setSecureMessage(
     return false;
 }
 
-bool SecureRF::getSecureMessage(
+bool SecureRF::waitingSecureMessage()
+{
+    if (keysSet && millis() - nonceGenTime < NONCE_LIFETIME && incomingAEAD)
+    {
+        return true;
+    }
+    incomingAEAD = false;
+    return false;
+}
+
+bool SecureRF::onSecureMessage(
     unsigned char *in)
 {
     uint8_t msgLen, adLen;
@@ -168,7 +253,7 @@ bool SecureRF::getSecureMessage(
         memcpy(tmp_ciphtag, in + adLen, msgLen + XOODYAK_TAG_SIZE);
 
         /* Xoodyak AEAD Decrypt and validation */
-        if (xoodyak_aead_decrypt((unsigned char *)PLAINTEXT, &msgLen, tmp_ciphtag, msgLen + XOODYAK_TAG_SIZE, tmp_ad, adLen, nonce, key) == 0)
+        if (xoodyak_aead_decrypt((unsigned char *)PLAINTEXT, &msgLen, tmp_ciphtag, msgLen + XOODYAK_TAG_SIZE, tmp_ad, adLen, nonce, keyX) == 0)
         {
             /* Check ad+cipher+tag length is OK */
             if (adLen + msgLen + XOODYAK_TAG_SIZE <= RFM69_MAX_PAYLOAD_SIZE)
@@ -192,11 +277,30 @@ bool SecureRF::getSecureMessage(
     return false;
 }
 
+bool SecureRF::setNonce(const unsigned char *n, uint8_t offset)
+{
+    /* Update generation/request time and limit generation frequency */
+    if (millis() - nonceGenTime < NONCE_MIN_GEN_TIME)
+    {
+        nonceGenTime = millis();
+        return false;
+    }
+    nonceGenTime = millis();
+
+    /* If nonce is same as previous -> error */
+    if (memcmp(n + offset, nonce, XOODYAK_NONCE_SIZE) == 0)
+    {
+        return false;
+    }
+    memcpy(nonce, n + offset, XOODYAK_NONCE_SIZE);
+    return true;
+}
+
 /*********** Private functions **********/
 
-void emptyMem(unsigned char *ptr, uint8_t bytes)
+void emptyMem(unsigned char *ptr, uint8_t nBytes)
 {
-    memset(ptr, 0, bytes);
+    memset(ptr, 0, nBytes);
 }
 
 int8_t xoodyak_aead_encrypt(
@@ -335,6 +439,117 @@ int8_t xoodyak_aead_decrypt(
     state.B[sizeof(state.B) - 1] ^= 0x40; /* Domain separation */
     xoodoo_permute(&state);
     return aead_check_tag(mtemp, *mlen, state.B, c, XOODYAK_TAG_SIZE);
+}
+
+void xoodyak_hash_absorb(xoodyak_hash_state_t *state, const unsigned char *in, uint8_t inlen)
+{
+    uint8_t domain;
+    unsigned temp;
+
+    /* If we were squeezing, then restart the absorb phase */
+    if (state->s.mode == XOODYAK_HASH_MODE_SQUEEZE)
+    {
+        xoodoo_hash_permute(state);
+        state->s.mode = XOODYAK_HASH_MODE_INIT_ABSORB;
+        state->s.count = 0;
+    }
+
+    /* The first block needs a different domain separator to the others */
+    domain = (state->s.mode == XOODYAK_HASH_MODE_INIT_ABSORB) ? 0x01 : 0x00;
+
+    /* Absorb the input data into the state */
+    while (inlen > 0)
+    {
+        if (state->s.count >= XOODYAK_HASH_RATE)
+        {
+            state->s.state[XOODYAK_HASH_RATE] ^= 0x01; /* Padding */
+            state->s.state[sizeof(state->s.state) - 1] ^= domain;
+            xoodoo_hash_permute(state);
+            state->s.mode = XOODYAK_HASH_MODE_ABSORB;
+            state->s.count = 0;
+            domain = 0x00;
+        }
+        temp = XOODYAK_HASH_RATE - state->s.count;
+        if (temp > inlen)
+            temp = (unsigned)inlen;
+        lw_xor_block(state->s.state + state->s.count, in, temp);
+        state->s.count += temp;
+        in += temp;
+        inlen -= temp;
+    }
+}
+
+void xoodyak_hash_init(xoodyak_hash_state_t *state)
+{
+    memset(state, 0, sizeof(xoodyak_hash_state_t));
+    state->s.mode = XOODYAK_HASH_MODE_INIT_ABSORB;
+}
+
+void xoodyak_hash_squeeze(xoodyak_hash_state_t *state, unsigned char *out, size_t outlen)
+{
+    uint8_t domain;
+    unsigned temp;
+
+    /* If we were absorbing, then terminate the absorb phase */
+    if (state->s.mode != XOODYAK_HASH_MODE_SQUEEZE)
+    {
+        domain = (state->s.mode == XOODYAK_HASH_MODE_INIT_ABSORB) ? 0x01 : 0x00;
+        state->s.state[state->s.count] ^= 0x01; /* Padding */
+        state->s.state[sizeof(state->s.state) - 1] ^= domain;
+        xoodoo_hash_permute(state);
+        state->s.mode = XOODYAK_HASH_MODE_SQUEEZE;
+        state->s.count = 0;
+    }
+
+    /* Squeeze data out of the state */
+    while (outlen > 0)
+    {
+        if (state->s.count >= XOODYAK_HASH_RATE)
+        {
+            /* Padding is always at index 0 for squeezing subsequent
+             * blocks because the number of bytes we have absorbed
+             * since the previous block was squeezed out is zero */
+            state->s.state[0] ^= 0x01;
+            xoodoo_hash_permute(state);
+            state->s.count = 0;
+        }
+        temp = XOODYAK_HASH_RATE - state->s.count;
+        if (temp > outlen)
+            temp = (unsigned)outlen;
+        memcpy(out, state->s.state + state->s.count, temp);
+        state->s.count += temp;
+        out += temp;
+        outlen -= temp;
+    }
+}
+
+void xoodyak_hash_finalize(xoodyak_hash_state_t *state, unsigned char *out)
+{
+    xoodyak_hash_squeeze(state, out, XOODYAK_HASH_SIZE);
+}
+
+void xoodyak_hash_pad(xoodyak_hash_state_t *state)
+{
+    if (state->s.mode == XOODYAK_HASH_MODE_SQUEEZE)
+    {
+        /* We were squeezing output, so re-enter the absorb phase
+         * which will implicitly align on a rate block boundary */
+        xoodyak_hash_absorb(state, (unsigned char*)0, (uint8_t)0);
+    }
+    else if (state->s.count != 0 && state->s.count != XOODYAK_HASH_RATE)
+    {
+        /* Not currently aligned, so finish off the current block */
+        state->s.count = XOODYAK_HASH_RATE;
+    }
+}
+
+int xoodyak_hash(unsigned char *out, const unsigned char *in, uint8_t inlen)
+{
+    xoodyak_hash_state_t state;
+    xoodyak_hash_init(&state);
+    xoodyak_hash_absorb(&state, in, inlen);
+    xoodyak_hash_squeeze(&state, out, XOODYAK_HASH_SIZE);
+    return 0;
 }
 
 /* Permutes the Xoodoo state (in little-endian) */

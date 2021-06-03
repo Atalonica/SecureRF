@@ -1,9 +1,11 @@
 ######### FUNCTIONS (KEYWORD2) ######### 
 SecureRF	KEYWORD2
-setMasterKey	KEYWORD2
-setSecureMessage	KEYWORD2
-getSecureMessage	KEYWORD2
-setNonce	KEYWORD2
+setKeys KEYWORD2
+createNonceRequest  KEYWORD2
+onNonceRequest  KEYWORD2
+onNonceResponse KEYWORD2
+createSecureMessage KEYWORD2
+onSecureMessage KEYWORD2
 
 ######### OTHER (LITERAL2) ######### 
 PLAINTEXT_LEN	LITERAL2
