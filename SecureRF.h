@@ -204,7 +204,8 @@ private:
     unsigned char _nReqNameId[4];
     unsigned char _nReqRandId[4];
     unsigned char nonce[XOODYAK_NONCE_SIZE]; // nonce
-    uint32_t nonceGenTime;
+    uint32_t nonceGenTime, nonceMinGenTime = NONCE_MIN_GEN_TIME;
+    uint32_t nErrorCounter = 0;
     bool incomingAEAD = false;
 
     bool setNonce(const unsigned char *n, uint8_t offset = 0);

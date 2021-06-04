@@ -119,6 +119,17 @@ bool SecureRF::createNonceRequest(const unsigned char *nReqNameId, const unsigne
 
 bool SecureRF::onNonceRequest(unsigned char *nReq, const unsigned char *n, unsigned char *nRes)
 {
+
+    /* If the nonce has been already send and another nonce request is received,
+     * maybe an attacker is replaying nonces requests,
+     * increase nonceMinGenTime exponentially. 
+     */
+    if(waitingSecureMessage())
+    {
+        nErrorCounter++;
+        nonceMinGenTime *= nErrorCounter;
+    }
+
     /* Buffer to be hashed */
     unsigned char in[36];
     memcpy(in, nReq, 8);
@@ -147,6 +158,10 @@ bool SecureRF::onNonceRequest(unsigned char *nReq, const unsigned char *n, unsig
             }
         }
     }
+
+    /* If nonce request fails checks, increase error */
+    nErrorCounter++;
+    nonceMinGenTime *= nErrorCounter;
     return false;
 }
 
@@ -264,6 +279,11 @@ bool SecureRF::onSecureMessage(
                 memcpy(ASSOCIATED, tmp_ad + 1, ASSOCIATED_LEN);
                 PLAINTEXT_LEN = msgLen;
                 PLAINTEXT[msgLen] = 0;
+
+                /* Reset nonceMinGenTime (in case it was increased) */
+                nonceMinGenTime = NONCE_MIN_GEN_TIME;
+                nErrorCounter = 0;
+
                 return true;
             }
         }
@@ -280,7 +300,7 @@ bool SecureRF::onSecureMessage(
 bool SecureRF::setNonce(const unsigned char *n, uint8_t offset)
 {
     /* Update generation/request time and limit generation frequency */
-    if (millis() - nonceGenTime < NONCE_MIN_GEN_TIME)
+    if (millis() - nonceGenTime < nonceMinGenTime)
     {
         nonceGenTime = millis();
         return false;
