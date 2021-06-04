@@ -121,7 +121,7 @@ bool SecureRF::onNonceRequest(unsigned char *nReq, const unsigned char *n, unsig
 {
 
     /* If the nonce has been already send and another nonce request is received,
-     * maybe an attacker is replaying nonces requests,
+     * maybe an attacker is replaying nonce requests,
      * increase nonceMinGenTime exponentially. 
      */
     if(waitingSecureMessage())
