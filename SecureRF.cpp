@@ -28,7 +28,7 @@
 #include <string.h>
 
 /*********** Variables ***********/
-unsigned char SecureRF::PLAINTEXT[RFM69_MAX_PAYLOAD_SIZE - MAX_AD_SIZE - XOODYAK_TAG_SIZE + 1];
+unsigned char SecureRF::PLAINTEXT[RFM69_MAX_PAYLOAD_SIZE - 1 - XOODYAK_TAG_SIZE + 1];
 unsigned char SecureRF::ASSOCIATED[MAX_AD_SIZE + 1];
 unsigned char SecureRF::SECURE_PAYLOAD[RFM69_MAX_PAYLOAD_SIZE + 1];
 uint8_t SecureRF::PLAINTEXT_LEN;
@@ -76,7 +76,7 @@ SecureRF::SecureRF()
     PLAINTEXT_LEN = 0;
     ASSOCIATED_LEN = 0;
     SECURE_PAYLOAD_LEN = 0;
-    emptyMem(PLAINTEXT, RFM69_MAX_PAYLOAD_SIZE - MAX_AD_SIZE - XOODYAK_TAG_SIZE + 1);
+    emptyMem(PLAINTEXT, RFM69_MAX_PAYLOAD_SIZE - 1 - XOODYAK_TAG_SIZE + 1);
     emptyMem(ASSOCIATED, MAX_AD_SIZE + 1);
     emptyMem(SECURE_PAYLOAD, RFM69_MAX_PAYLOAD_SIZE + 1);
 }
@@ -128,6 +128,7 @@ bool SecureRF::onNonceRequest(unsigned char *nReq, const unsigned char *n, unsig
     {
         nErrorCounter++;
         nonceMinGenTime *= nErrorCounter;
+        return false;
     }
 
     /* Buffer to be hashed */
@@ -231,7 +232,7 @@ bool SecureRF::createSecureMessage(
     PLAINTEXT_LEN = 0;
     ASSOCIATED_LEN = 0;
     SECURE_PAYLOAD_LEN = 0;
-    emptyMem(PLAINTEXT, RFM69_MAX_PAYLOAD_SIZE - MAX_AD_SIZE - XOODYAK_TAG_SIZE + 1);
+    emptyMem(PLAINTEXT, RFM69_MAX_PAYLOAD_SIZE - 1 - XOODYAK_TAG_SIZE + 1);
     emptyMem(ASSOCIATED, MAX_AD_SIZE + 1);
     emptyMem(SECURE_PAYLOAD, RFM69_MAX_PAYLOAD_SIZE + 1);
     return false;
@@ -255,6 +256,7 @@ bool SecureRF::onSecureMessage(
     unsigned char tmp_ad[5];
     PLAINTEXT_LEN = 0;
     ASSOCIATED_LEN = 0;
+    incomingAEAD = false;
 
     /* Ensure that nonce has not expired */
     if (millis() - nonceGenTime < NONCE_LIFETIME)
@@ -291,7 +293,7 @@ bool SecureRF::onSecureMessage(
     PLAINTEXT_LEN = 0;
     ASSOCIATED_LEN = 0;
     SECURE_PAYLOAD_LEN = 0;
-    emptyMem(PLAINTEXT, RFM69_MAX_PAYLOAD_SIZE - MAX_AD_SIZE - XOODYAK_TAG_SIZE + 1);
+    emptyMem(PLAINTEXT, RFM69_MAX_PAYLOAD_SIZE - 1 - XOODYAK_TAG_SIZE + 1);
     emptyMem(ASSOCIATED, MAX_AD_SIZE + 1);
     emptyMem(SECURE_PAYLOAD, RFM69_MAX_PAYLOAD_SIZE + 1);
     return false;

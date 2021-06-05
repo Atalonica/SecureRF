@@ -153,7 +153,7 @@ class SecureRF
 public:
     SecureRF();
 
-    static unsigned char PLAINTEXT[RFM69_MAX_PAYLOAD_SIZE - MAX_AD_SIZE - XOODYAK_TAG_SIZE + 1];
+    static unsigned char PLAINTEXT[RFM69_MAX_PAYLOAD_SIZE - 1 - XOODYAK_TAG_SIZE + 1];
     static unsigned char ASSOCIATED[MAX_AD_SIZE + 1];
     static unsigned char SECURE_PAYLOAD[RFM69_MAX_PAYLOAD_SIZE + 1];
 
