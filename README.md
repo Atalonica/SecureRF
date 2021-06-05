@@ -12,14 +12,18 @@ MIT. See [LICENCE](https://github.com/Atalonica/SecureRF/blob/main/LICENSE) file
 ## Features
 - Authentication Encryption with Associated Data lightweight protocol (Xoodyak)
 - Ephemeral nonce exchange for replay prevention
+- Exponential halt timer for nonce attack prevention
 - 41-44 bytes max message length
 - 3-1 bytes of associated data
 - (All is hardware AES-128 encrypted/decrypted by RFM69)
 
 ### Library Installation (Arduino IDE)
-Copy the content of this library in the "Arduino/libraries/SecureRF" folder.
+Go to you Arduino IDE then click on `Sketch > Include Library > Add .ZIP Library...` and select the latest .zip file found in releases.
+
+If it doesn't work:<br />
+Copy the contents of this library in a new folder called "SecureRF" located in "Arduino/libraries/".
 <br />
-To find your Arduino folder go to File>Preferences in the Arduino IDE.
+To find your Arduino folder go to `File > Preferences` in the Arduino IDE.
 <br/>
 See [this tutorial](https://www.arduino.cc/en/Guide/Libraries) on Arduino libraries.
 
