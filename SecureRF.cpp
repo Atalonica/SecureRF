@@ -124,9 +124,9 @@ bool SecureRF::onNonceRequest(unsigned char *nReq, const unsigned char *n, unsig
      * maybe an attacker is replaying nonce requests,
      * increase nonceMinGenTime exponentially. 
      */
-    if(waitingSecureMessage())
+    if(incomingAEAD)
     {
-        nErrorCounter++;
+        nErrorCounter = (nErrorCounter >= 200000 ? nErrorCounter : nErrorCounter + 1);
         nonceMinGenTime *= nErrorCounter;
         return false;
     }
@@ -161,7 +161,7 @@ bool SecureRF::onNonceRequest(unsigned char *nReq, const unsigned char *n, unsig
     }
 
     /* If nonce request fails checks, increase error */
-    nErrorCounter++;
+    nErrorCounter = nErrorCounter >= 200000 ? nErrorCounter : nErrorCounter + 1;
     nonceMinGenTime *= nErrorCounter;
     return false;
 }
@@ -242,9 +242,9 @@ bool SecureRF::waitingSecureMessage()
 {
     if (keysSet && millis() - nonceGenTime < NONCE_LIFETIME && incomingAEAD)
     {
+        incomingAEAD = false;
         return true;
     }
-    incomingAEAD = false;
     return false;
 }
 
@@ -256,7 +256,6 @@ bool SecureRF::onSecureMessage(
     unsigned char tmp_ad[5];
     PLAINTEXT_LEN = 0;
     ASSOCIATED_LEN = 0;
-    incomingAEAD = false;
 
     /* Ensure that nonce has not expired */
     if (millis() - nonceGenTime < NONCE_LIFETIME)
@@ -302,20 +301,20 @@ bool SecureRF::onSecureMessage(
 bool SecureRF::setNonce(const unsigned char *n, uint8_t offset)
 {
     /* Update generation/request time and limit generation frequency */
-    if (millis() - nonceGenTime < nonceMinGenTime)
+    if (millis() - nonceGenTime > nonceMinGenTime)
     {
         nonceGenTime = millis();
-        return false;
+        /* If nonce is same as previous -> error */
+        if (memcmp(n + offset, nonce, XOODYAK_NONCE_SIZE) == 0)
+        {
+            return false;
+        }
+        memcpy(nonce, n + offset, XOODYAK_NONCE_SIZE);
+        return true;
     }
-    nonceGenTime = millis();
 
-    /* If nonce is same as previous -> error */
-    if (memcmp(n + offset, nonce, XOODYAK_NONCE_SIZE) == 0)
-    {
-        return false;
-    }
-    memcpy(nonce, n + offset, XOODYAK_NONCE_SIZE);
-    return true;
+    nonceGenTime = millis();
+    return false;
 }
 
 /*********** Private functions **********/
