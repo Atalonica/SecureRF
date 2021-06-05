@@ -142,7 +142,7 @@ void loop() {
 
       /* DEBUG... */
       Debug("["); Debug(NODE_ID); Debug("]: RECEIVED NEW DATA (SENDER:");
-      Debug(SENDER_NODE_ID); Debug(") -> ("); Debug(radio.DATALEN); Debug("){")
+      Debug(SENDER_NODE_ID); Debug(") -> ("); Debug(radio.DATALEN); Debug("){ ");
       for (uint8_t i = 0; i < radio.DATALEN; i++) {
         DebugHex(radio.DATA[i]);
         if (i < radio.DATALEN - 1) Debug(":");
