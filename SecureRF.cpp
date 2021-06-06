@@ -76,6 +76,9 @@ SecureRF::SecureRF()
     PLAINTEXT_LEN = 0;
     ASSOCIATED_LEN = 0;
     SECURE_PAYLOAD_LEN = 0;
+    nErrorCounter = 0;
+    incomingAEAD = false;
+    
     emptyMem(PLAINTEXT, RFM69_MAX_PAYLOAD_SIZE - 1 - XOODYAK_TAG_SIZE + 1);
     emptyMem(ASSOCIATED, MAX_AD_SIZE + 1);
     emptyMem(SECURE_PAYLOAD, RFM69_MAX_PAYLOAD_SIZE + 1);
@@ -126,8 +129,11 @@ bool SecureRF::onNonceRequest(unsigned char *nReq, const unsigned char *n, unsig
      */
     if(incomingAEAD)
     {
-        nErrorCounter = (nErrorCounter >= 200000 ? nErrorCounter : nErrorCounter + 1);
-        nonceMinGenTime *= nErrorCounter;
+        if(nErrorCounter < 3500)
+        {
+            nErrorCounter++;
+            nonceMinGenTime += nErrorCounter * NONCE_MIN_GEN_TIME;
+        }
         return false;
     }
 
@@ -161,8 +167,11 @@ bool SecureRF::onNonceRequest(unsigned char *nReq, const unsigned char *n, unsig
     }
 
     /* If nonce request fails checks, increase error */
-    nErrorCounter = nErrorCounter >= 200000 ? nErrorCounter : nErrorCounter + 1;
-    nonceMinGenTime *= nErrorCounter;
+    if(nErrorCounter < 3500)
+    {
+        nErrorCounter++;
+        nonceMinGenTime += nErrorCounter * NONCE_MIN_GEN_TIME;
+    }
     return false;
 }
 
