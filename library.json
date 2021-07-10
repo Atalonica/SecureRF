@@ -1,6 +1,6 @@
 {
     "name": "SecureRF",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "keywords": "secure, aead, xoodyak, crypto, rf, radio, nonce",
     "description": "Secure, Authenticated Encryption with Associated Data library for Arduino. Based on Xoodyak, with secure nonce exchange mechanism.",
     "repository": {
