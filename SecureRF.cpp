@@ -270,7 +270,7 @@ bool SecureRF::onSecureMessage(
     if (millis() - nonceGenTime < NONCE_LIFETIME)
     {
         /* Extract AD and message lengths */
-        adLen = (in[0] >> 6) + 1;
+        adLen = (in[0] >> 6);
         msgLen = in[0] & 0x3F;
 
         /* Split AD and Ciphertext+Tag: IN -> AD + (CIPH+TAG)*/
