@@ -10,7 +10,7 @@ The latest examples, new features and bug fixes are found in the [original repos
 MIT. See [LICENCE](https://github.com/Atalonica/SecureRF/blob/main/LICENSE) file (license and copyright notice shall be included in copies or portions of code).
 
 ## Features
-- Authentication Encryption with Associated Data lightweight protocol (Xoodyak)
+- Authentication Encryption with Associated Data lightweight protocol (ASCON128)
 - Ephemeral nonce exchange for replay prevention
 - Exponential halt timer for nonce attack prevention
 - 41-44 bytes max message length
